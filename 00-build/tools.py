@@ -124,9 +124,24 @@ def propose_stories(project_id: str, stories=None, reason: str = "") -> dict:
             "note": "queued for a human to approve, nothing was created in the tracker."}
 
 
+def notify_reviewer(project_id: str, message: str = "") -> dict:
+    """Ping the human reviewer that a draft is ready to look at. Sends ONLY a
+    notification (e.g. "your weekly update is ready to review"), never the update
+    content itself, there is still no publish tool. This is invoked by the agent
+    LOOP on a successful DONE, not something the model calls itself, the same way
+    the cost cap is enforced outside the model rather than requested by it."""
+    return {"status": "notified", "project_id": str(project_id).strip(),
+            "message": message or "your draft is ready for review",
+            "note": "reviewer pinged that a draft is waiting; no content was sent, "
+                    "nothing was posted."}
+
+
 # Registry the agent loop reads. Add a tool here and the agent can call it.
 # Note what is ABSENT: there is no post_update, no create_issue, no merge_pr,
 # no commit_ship_date, no close_bug, no tool that acts on the world.
+# notify_reviewer is deliberately NOT in this registry: it is called by the loop
+# itself on a passing DONE, never by the model, so Cortex can't "notify" its way
+# into something that looks like publishing.
 TOOLS = {
     "get_task": get_task,
     "get_project": get_project,

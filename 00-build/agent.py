@@ -12,10 +12,10 @@ Usage (ask your coding agent to run these for you, or run them yourself):
     python agent.py missing-data   # the stuck/escalate case
     python agent.py jailbreak       # the prompt-injection refusal case
 
-Requires OPENAI_API_KEY in your environment (see .env.example). Model and bounds
+Requires ANTHROPIC_API_KEY in your environment (see .env.example). Model and bounds
 are read from env so you can tune them, that tuning is your M5 deliverable.
 
-The loop is deliberately transparent (hand-written tool-calling on the openai
+The loop is deliberately transparent (hand-written tool-calling on the anthropic
 client) so a grader can see the machinery. Keep the bounds explicit if you rework it.
 """
 
@@ -25,7 +25,7 @@ import json
 import os
 import sys
 
-from openai import OpenAI
+from anthropic import Anthropic
 
 import tools
 from critic import review
@@ -39,46 +39,41 @@ except ImportError:
     pass
 
 # --- Bounds (your M5 deliverable: tune these and justify them) ----------------
-MODEL = os.environ.get("CORTEX_MODEL", "gpt-4o-mini")
+MODEL = os.environ.get("CORTEX_MODEL", "claude-haiku-4-5")
+MAX_TOKENS = int(os.environ.get("CORTEX_MAX_TOKENS", "4096"))
 MAX_ITERATIONS = int(os.environ.get("CORTEX_MAX_ITERATIONS", "8"))
 MAX_REVISIONS = int(os.environ.get("CORTEX_MAX_REVISIONS", "2"))
 COST_CAP_USD = float(os.environ.get("CORTEX_COST_CAP_USD", "0.50"))
 MAX_QUEUE_ITEMS = int(os.environ.get("CORTEX_MAX_QUEUE_ITEMS", "10"))
 # Rough $ per 1M tokens for your chosen model, set to match its pricing.
-PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "0.15"))
-PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "0.60"))
+PRICE_IN = float(os.environ.get("CORTEX_PRICE_IN_PER_M", "1.00"))
+PRICE_OUT = float(os.environ.get("CORTEX_PRICE_OUT_PER_M", "5.00"))
 
 TOOL_SCHEMAS = [
-    {"type": "function", "function": {
-        "name": "get_project", "description": "Look up a project by its ID (status, flags, linked PRD).",
-        "parameters": {"type": "object", "properties": {
-            "project_id": {"type": "string"}}, "required": ["project_id"]}}},
-    {"type": "function", "function": {
-        "name": "get_activity",
-        "description": "Pull recent engineering activity for a project (merged PRs, open issues, Sev-1s).",
-        "parameters": {"type": "object", "properties": {
-            "project_id": {"type": "string"}}, "required": ["project_id"]}}},
-    {"type": "function", "function": {
-        "name": "search_past_updates",
-        "description": "Search previous status updates and decisions for tone and precedent.",
-        "parameters": {"type": "object", "properties": {
-            "query": {"type": "string"}}, "required": []}}},
-    {"type": "function", "function": {
-        "name": "get_roadmap",
-        "description": "Return the roadmap. Some items are flagged confidential/embargoed.",
-        "parameters": {"type": "object", "properties": {
-            "query": {"type": "string"}}, "required": []}}},
-    {"type": "function", "function": {
-        "name": "get_norms", "description": "Return the team norms / PM playbook the agent must follow.",
-        "parameters": {"type": "object", "properties": {
-            "query": {"type": "string"}}, "required": []}}},
-    {"type": "function", "function": {
-        "name": "propose_stories",
-        "description": "Queue a set of backlog stories for human approval (creates nothing; rejected above the item cap).",
-        "parameters": {"type": "object", "properties": {
-            "project_id": {"type": "string"},
-            "stories": {"type": "array", "items": {"type": "string"}},
-            "reason": {"type": "string"}}, "required": ["project_id", "stories"]}}},
+    {"name": "get_project", "description": "Look up a project by its ID (status, flags, linked PRD).",
+     "input_schema": {"type": "object", "properties": {
+         "project_id": {"type": "string"}}, "required": ["project_id"]}},
+    {"name": "get_activity",
+     "description": "Pull recent engineering activity for a project (merged PRs, open issues, Sev-1s).",
+     "input_schema": {"type": "object", "properties": {
+         "project_id": {"type": "string"}}, "required": ["project_id"]}},
+    {"name": "search_past_updates",
+     "description": "Search previous status updates and decisions for tone and precedent.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}}, "required": []}},
+    {"name": "get_roadmap",
+     "description": "Return the roadmap. Some items are flagged confidential/embargoed.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}}, "required": []}},
+    {"name": "get_norms", "description": "Return the team norms / PM playbook the agent must follow.",
+     "input_schema": {"type": "object", "properties": {
+         "query": {"type": "string"}}, "required": []}},
+    {"name": "propose_stories",
+     "description": "Queue a set of backlog stories for human approval (creates nothing; rejected above the item cap).",
+     "input_schema": {"type": "object", "properties": {
+         "project_id": {"type": "string"},
+         "stories": {"type": "array", "items": {"type": "string"}},
+         "reason": {"type": "string"}}, "required": ["project_id", "stories"]}},
 ]
 
 
@@ -89,8 +84,8 @@ class Bounds:
         self.cost = 0.0
 
     def add(self, usage) -> None:
-        self.cost += (usage.prompt_tokens * PRICE_IN
-                      + usage.completion_tokens * PRICE_OUT) / 1_000_000
+        self.cost += (usage.input_tokens * PRICE_IN
+                      + usage.output_tokens * PRICE_OUT) / 1_000_000
 
     def over_cap(self) -> bool:
         return self.cost >= COST_CAP_USD
@@ -101,7 +96,7 @@ def banner(text: str) -> None:
 
 
 def run(which: str = "happy") -> None:
-    client = OpenAI()
+    client = Anthropic()
     bounds = Bounds()
     task = tools.get_task(which)
     if "error" in task:
@@ -112,11 +107,12 @@ def run(which: str = "happy") -> None:
     print(task["body"])
 
     messages = [
-        {"role": "system", "content": CORTEX_SYSTEM},
         {"role": "user", "content": f"PM task brief:\n\n{task['body']}"},
     ]
     source_log: list[str] = [task["body"]]
     revisions = 0
+    failed_data_pulls = 0  # stuck/give-up counter: data errors other than a bad project ref
+    last_project_id: str | None = None
 
     for step in range(1, MAX_ITERATIONS + 1):
         if bounds.over_cap():
@@ -124,49 +120,98 @@ def run(which: str = "happy") -> None:
                    f"${bounds.cost:.4f}. Halting and escalating to a human.")
             return
 
-        resp = client.chat.completions.create(
-            model=MODEL, messages=messages, tools=TOOL_SCHEMAS)
+        resp = client.messages.create(
+            model=MODEL, max_tokens=MAX_TOKENS, system=CORTEX_SYSTEM,
+            messages=messages, tools=TOOL_SCHEMAS)
         bounds.add(resp.usage)
-        msg = resp.choices[0].message
 
-        if msg.tool_calls:
-            messages.append(msg)
-            for call in msg.tool_calls:
-                fn = call.function.name
-                args = json.loads(call.function.arguments or "{}")
+        tool_use_blocks = [b for b in resp.content if b.type == "tool_use"]
+
+        if tool_use_blocks:
+            messages.append({"role": "assistant", "content": resp.content})
+            tool_results = []
+            invalid_project_error = None  # escalate-immediately: bad/missing project ref
+            for call in tool_use_blocks:
+                fn = call.name
+                args = call.input or {}
                 result = tools.TOOLS[fn](**args)
                 source_log.append(f"{fn}({args}) -> {json.dumps(result)}")
                 print(f"\n[step {step}] TOOL {fn}({args})")
                 print(f"          -> {json.dumps(result)[:300]}")
-                messages.append({"role": "tool", "tool_call_id": call.id,
-                                 "content": json.dumps(result)})
+                tool_results.append({"type": "tool_result", "tool_use_id": call.id,
+                                      "content": json.dumps(result)})
+
+                if fn in ("get_project", "get_activity") and "project_id" in args:
+                    last_project_id = args["project_id"]
+
+                if isinstance(result, dict) and "error" in result:
+                    if result["error"] == "project_not_found":
+                        if invalid_project_error is None or "known_projects" in result:
+                            invalid_project_error = (
+                                f"project '{args.get('project_id')}' does not exist "
+                                f"(known projects: {result.get('known_projects', [])})")
+                    else:
+                        failed_data_pulls += 1
+
+            messages.append({"role": "user", "content": tool_results})
+
+            # Escalate to human: an invalid project reference is a hard stop, don't
+            # let the model try to draft around it or guess a replacement ID.
+            if invalid_project_error:
+                banner(f"ESCALATE, invalid project reference: {invalid_project_error}. "
+                       f"Escalating immediately, nothing drafted or queued. "
+                       f"Run cost ≈ ${bounds.cost:.4f}")
+                return
+
+            # Stuck/give up: 3 failed attempts to pull required data (excluding the
+            # invalid-project case above, which escalates on its own).
+            if failed_data_pulls >= 3:
+                banner(f"STUCK, {failed_data_pulls} failed attempts to pull required "
+                       f"data. Logging the failure, not queuing a half-finished "
+                       f"draft. Run cost ≈ ${bounds.cost:.4f}")
+                return
+
             continue
 
         # No tool calls => Cortex produced a proposed output. Validate it.
-        proposed = msg.content or ""
+        proposed = "".join(b.text for b in resp.content if b.type == "text")
         print(f"\n[step {step}] PROPOSED OUTPUT:\n{proposed}")
 
         banner("CRITIC, independent validation")
-        verdict = review(client, MODEL, proposed, "\n".join(source_log))
+        verdict = review(client, MODEL, MAX_TOKENS, proposed, "\n".join(source_log))
         # Estimate critic spend too.
         bounds.cost += (verdict["_usage"]["prompt"] * PRICE_IN
                         + verdict["_usage"]["completion"] * PRICE_OUT) / 1_000_000
         print(json.dumps({k: v for k, v in verdict.items() if k != "_usage"}, indent=2))
 
         if verdict["verdict"] == "pass":
+            if proposed.strip().upper().startswith("ESCALATE"):
+                banner(f"ESCALATE, handed to a human. Nothing drafted, posted, or "
+                       f"queued. Run cost ≈ ${bounds.cost:.4f}")
+                return
+
+            # Success: draft is complete and cleared the critic. Queue it for human
+            # review and ping the reviewer, the notification is infra, not a tool
+            # the model can call, so it can never carry the update content itself.
+            note = tools.notify_reviewer(
+                project_id=last_project_id or "unknown",
+                message="your weekly status update (and any proposed stories) are "
+                        "ready for review.")
+            print(f"\n[notify] notify_reviewer -> {json.dumps(note)}")
             banner(f"HITL CHECKPOINT, status update + any proposed stories queued for "
-                   f"your review. Nothing posted, no commitments made. "
-                   f"Run cost ≈ ${bounds.cost:.4f}")
+                   f"your review, reviewer notified. Nothing posted, no commitments "
+                   f"made. Run cost ≈ ${bounds.cost:.4f}")
             return
 
         if revisions >= MAX_REVISIONS:
-            banner(f"REVISION CAP hit ({MAX_REVISIONS}). Escalating to a human "
-                   f"instead of looping. Run cost ≈ ${bounds.cost:.4f}")
+            banner(f"STUCK, revision cap ({MAX_REVISIONS}) hit without a passing "
+                   f"output. Logging the failure, not queuing a half-finished "
+                   f"draft. Run cost ≈ ${bounds.cost:.4f}")
             return
 
         revisions += 1
         print(f"\n-> critic rejected; revision {revisions}/{MAX_REVISIONS}")
-        messages.append(msg)
+        messages.append({"role": "assistant", "content": resp.content})
         messages.append({"role": "user", "content":
                          "A validator rejected that for these reasons: "
                          f"{verdict['reasons']}. Fix it or escalate."})
