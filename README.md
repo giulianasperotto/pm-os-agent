@@ -1,66 +1,66 @@
-# Cortex: PM Chief-of-Staff Agent
+# Cortex, a PM Chief-of-Staff Agent
 
-> My final project for Product School's **Run Your AI Agent Team** certification. A chief-of-staff agent that turns raw inputs (project state, GitHub/Jira activity, roadmap, past updates) into finished PM work, a leadership status update and a proposed backlog for a human to clear, built loop-first, bounded, grown into a fleet, and shipped up the Trust Ladder.
+> An agent that drafts grounded sprint status updates and proposes backlog stories, with every commitment gated behind human approval.
 
-This is a **template repo**. Click **Use this template → Create a new repository**, name it `pm-os-agent` (or your own agent's name), and fill in one folder per module as you go.
+_Giuliana Sperotto · Run Your AI Agent Team Cohort · June 2026_
 
----
+Repo: https://github.com/giulianasperotto/pm-os-agent/
 
-## Deliverables at a glance
-
-| # | Deliverable | Module | Status | File |
-|---|---|---|---|---|
-| 1 | **Working agent demo** (real run screenshots; link optional) | Built across labs | ☐ | `06-autonomy/prototype.md` |
-| 2 | **Loop Spec** | M2 | ☐ | `02-loop-design/loop-spec.md` |
-| 3 | **Orchestration Map** | M3 | ☐ | `03-orchestration/orchestration-map.md` |
-| 4 | **Insights: build process** | M6 | ☐ | `06-autonomy/build-insights.md` |
-| 5 | **Insights: bounds, trust & autonomy strategy** | M6 | ☐ | `06-autonomy/governance-and-strategy.md` |
-
-## The agent in one sentence
-
-_What does your agent do, for whom, and where is the agent line, what does it decide vs. what stays human?_
-
-## Build & demo
-
-- **How you built it:** _which coding agent (Claude Code / Cursor / Codex) you directed, start in `00-build/`_
-- **Demo link:** _[optional shareable URL]_
-- **Run screenshots:** _required, collected M2 to M6 in `06-autonomy/prototype.md`_
-
-## Where it sits on the Trust Ladder
-
-_shadow · assisted · supervised · bounded-autonomous · autonomous, which rung today, and what eval evidence would let it climb the next one?_
+This repo is my final project for the Run Your AI Agent Team Certification, **Cortex**. Each module’s artifact lives in its own folder; this README is the dashboard and the pitch.
 
 ---
 
-## How to submit
+## Module artifacts
 
-- Turn the five deliverable files into your final deck (use the **Final Project Deliverables Builder** that ships with the course, it generates `pitch.html` + a clean `README.md` for you, or a tool like Gamma).
-- Submit your own copy to the LMS within 7 days of your cohort ending.
+### M1 · The Agent Line
+- **Agent-line map**: [`01-agent-line/agent-line-map.md`](01-agent-line/agent-line-map.md)
 
-## Repo structure
+### M2 · Loop Engineering
+- **Loop spec**: [`02-loop-design/loop-spec.md`](02-loop-design/loop-spec.md)
 
-```
-pm-os-agent/
-├── README.md                          ← this dashboard
-├── 00-build/                          ← runnable starter: the transparent Cortex agent,
-│   │                                    fixtures, RUNBOOK, PROMPTS, CORTEX-ANATOMY
-│   ├── RUNBOOK.md                     ← open in your coding agent, add a key, run a fixture, screenshot
-│   ├── PROMPTS.md                     ← the prompt pack: what to say to your coding agent
-│   ├── CORTEX-ANATOMY.md              ← the 7 things every submission must show
-│   ├── agent.py · critic.py · tools.py · prompts.py
-│   └── fixtures/                      ← mock PM tasks + project/roadmap/updates/norms data
-├── 01-agent-line/
-│   └── agent-line-map.md              ← M1: what to hand to the agent (above vs below the line)
-├── 02-loop-design/
-│   └── loop-spec.md                   ← M2: the Loop Spec                 ★ Deliverable 2
-├── 03-orchestration/
-│   └── orchestration-map.md           ← M3: your fleet + the validator     ★ Deliverable 3
-├── 04-memory-context/
-│   └── memory-and-context.md          ← M4: retrieve-vs-long-context + your PM brain
-├── 05-bounds-evals/
-│   └── bounds-and-evals.md            ← M5: hard bounds + trajectory evals
-└── 06-autonomy/
-    ├── prototype.md                   ← demo + screenshots                ★ Deliverable 1
-    ├── build-insights.md              ← friction · learning · aha         ★ Deliverable 4
-    └── governance-and-strategy.md     ← Trust Ladder + autonomy strategy  ★ Deliverable 5
-```
+### M3 · Orchestration &amp; Subagents
+- **Orchestration map**: [`03-orchestration/orchestration-map.md`](03-orchestration/orchestration-map.md)
+
+### M4 · Context Engineering &amp; Memory
+- **Memory &amp; context plan**: [`04-memory-context/memory-and-context.md`](04-memory-context/memory-and-context.md)
+
+### M5 · Bounds &amp; Evals
+- **Bounds &amp; evals**: [`05-bounds-evals/bounds-and-evals.md`](05-bounds-evals/bounds-and-evals.md)
+
+### M6 · Autonomy &amp; Production
+- **Production &amp; autonomy plan**: [`06-autonomy/production-and-autonomy.md`](06-autonomy/production-and-autonomy.md)
+- **Prototype write-up**: [`06-autonomy/prototype.md`](06-autonomy/prototype.md)
+
+---
+
+## Ship plan
+
+### Autonomy dial (per segment)
+New/cautious PM ("Tesla driver") → Supervised, every action reviewed. Experienced PM ("Waymo passenger") → Bounded-autonomous, routine low-risk updates post without per-action approval, spot-checked weekly.
+
+### Trust Ladder rung + eval gate
+Current rung: Supervised. Gate to reach Bounded-autonomous: ≥95% tool-call accuracy, ≥90% clean trajectories, ≥80% recovery without human, ≥90% task completion, sustained over 4 consecutive sprints, with a clean incident record (zero unauthorized commitments, zero leaks, zero jailbreak successes).
+
+### Deployment plan
+Runtime: serverless functions (matches the Hook+Cron loop type). On-call: named PM owner, escalates to eng for infrastructure-level failures. Rollback: revert prompt/critic version via git, disable the Jira hook, or drop the dial back a rung. Monitoring: dashboard tracking eval pass %, escalation rate, cost-to-serve, trust-incident count.
+
+### ROI metrics + widen-autonomy rule
+Task completion rate ≥90% (grounded draft + stories resolved without manual finish). Cost-to-serve measured fully loaded against the shadow-mode baseline. Trust incidents: 0/quarter target, any rise freezes widening. Dial only moves up when the eval gate clears over a real window AND the incident record is clean, one unauthorized action resets the clock and drops a rung.
+
+### Governance &amp; strategy
+Compliance: Confidential/embargoed roadmap items (e.g. other projects like P-ORBIT) never enter a draft, the Critic explicitly checks for this on every run before anything reaches a human.
+Safety: Story batches over the queue cap escalate rather than silently trimming; posting authorization is single-use and project-scoped; kill switch via API key revocation (immediate) + disabling the Jira hook (preventive).
+Reliability: Per-run iteration cap (8), daily cost cap ($0.50), and a revision cap (2) on the critic loop; on a stuck data pull or unconverged draft, Cortex escalates rather than looping forever or shipping a half-finished output.
+Strategy: Widen autonomy one segment at a time, starting with experienced users on routine, low-risk updates; the next bet is bounded-autonomous posting for green-status updates with no commitments, once the eval gate (M5 thresholds, sustained over 4 sprints with a clean incident record) holds.
+
+---
+
+## Build insights
+
+- **Friction point.** The build fought back hardest at the boundary between "done" and "escalate." The starter code conflated the two into a single path, so a correct refusal (Cortex asking for clarification instead of inventing data) could slip through as a false "ready for review" notification if it didn't use the exact DONE:/ESCALATE: format.
+- **Key learning.** Bounds only work if they're enforced by the harness, not requested of the model. The cost cap, revision cap, and notify step all had to live outside the model's control specifically so a confused or manipulated run couldn't talk its way around them.
+- **Aha moment.** Watching the critic reject the same run twice before converging on a properly grounded escalation was the moment the revision-cap-plus-critic design stopped being a diagram and became visibly load-bearing, the system self-corrected without anyone editing a prompt mid-run.
+
+---
+
+_Certification submission, Run Your AI Agent Team Certification._
